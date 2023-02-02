@@ -15,14 +15,12 @@ def load_model(model: str, load_path: str):
     model.load_state_dict(torch.load(load_path), strict=False)  
     return model
 
-def get_scores(samples: List[str]):
+def get_scores(samples: List[str])-> torch.tensor:
     scores_list = []
     batch_size = 2
     for i in range(0, len(samples), batch_size):
         sub_samples = samples[i : i + batch_size]
-        sub_samples = [
-            "<|startoftext|>" + chosen + "<|endoftext|>" for chosen in sub_samples
-        ]
+        sub_samples = ["<|startoftext|>" + chosen + "<|endoftext|>" for chosen in sub_samples]
         encodings_dict = rw_tokenizer(
             sub_samples,
             truncation=True,
@@ -37,23 +35,20 @@ def get_scores(samples: List[str]):
         with torch.no_grad():
             sub_scores = rw_model(input_ids=input_ids, attention_mask=attn_masks).logits
             reshaped = sub_scores[:2].reshape(2)
-            
         scores_list.append(reshaped)
     scores = torch.cat(scores_list, dim=0)
     return scores
 
-def get_prompt_dataset(prompts, max_length):
+def get_prompt_dataset(prompts: List[str], max_length: int) -> List[str]:
     formatted_prompts = []
     for i in tqdm(range(len(prompts))):
         tmp = tokenizer.decode(
             tokenizer(
-                prompts[i].split("cont:")[0],
+                prompts[i],
                 truncation=True,
-                max_length=max_length - 2, 
-            )["input_ids"],
+                max_length=max_length,)["input_ids"],
             skip_special_tokens=True,
         ).strip()
-        tmp = tmp + "\ncont:"
         tmp = tokenizer.decode(
             tokenizer(tmp, truncation=True, max_length=max_length)["input_ids"],
             skip_special_tokens=True,
@@ -61,11 +56,8 @@ def get_prompt_dataset(prompts, max_length):
         formatted_prompts.append(tmp)
     return formatted_prompts
 
-def reward_fn(samples: List[str], **kwargs):
-    original_samples = [text.split("cont:")[0] + "cont: " for text in samples]
-    original_samples = [
-        text + post_continuation_dict[text.strip()] for text in original_samples
-    ]
+def reward_fn(samples: List[str], **kwargs) -> torch.tensor:
+    original_samples = [text + post_continuation_dict.get(text, " ") for text in samples]
     original_scores = get_scores(original_samples)
     scores = get_scores(samples)
     norms_scores = scores - original_scores
@@ -97,7 +89,6 @@ if __name__ == "__main__":
     val_set = [(sample["prompt"], sample["label"]) for sample in dataset["val"]]
     train_posts, train_continuations = zip(*train_set)
     val_posts, val_continuations = zip(*val_set)
-
     post_continuation_dict = {}
     train_prompts = get_prompt_dataset(train_posts, max_length_input)
     for i in range(len(train_prompts)):
