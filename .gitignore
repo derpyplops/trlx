@@ -151,3 +151,7 @@ examples/experiments/grounded_program_synthesis/dataset
 ckpts/
 
 ray_results/
+
+examples/increase_utility/ethics.tar
+examples/increase_utility/ethics
+examples/increase_utility/reward_model
