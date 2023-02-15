@@ -16,6 +16,10 @@ def load_model(model: str, load_path: str):
     return model
 
 def get_scores(samples: List[str])-> torch.tensor:
+    """
+    Could make this more general by adding tokenizer and model as arguments. 
+    That way we can use it for getting gold model scores and reward model scores. 
+    """
     scores_list = []
     batch_size = 2
     for i in range(0, len(samples), batch_size):
@@ -42,6 +46,7 @@ def get_scores(samples: List[str])-> torch.tensor:
 def get_prompt_dataset(prompts: List[str], max_length: int) -> List[str]:
     formatted_prompts = []
     for i in tqdm(range(len(prompts))):
+        # Should we delete the first tmp?
         tmp = tokenizer.decode(
             tokenizer(
                 prompts[i],
@@ -56,7 +61,10 @@ def get_prompt_dataset(prompts: List[str], max_length: int) -> List[str]:
         formatted_prompts.append(tmp)
     return formatted_prompts
 
-def reward_fn(samples: List[str], **kwargs) -> torch.tensor:
+def reward_fn(samples: List[str], post_continuation_dict: Dict[str,str], **kwargs) -> torch.tensor:
+    """
+    Normalizes the reward scores of completions by subtracting the reward score of the prompt. 
+    """
     original_samples = [text + post_continuation_dict.get(text, " ") for text in samples]
     original_scores = get_scores(original_samples)
     scores = get_scores(samples)
@@ -99,10 +107,13 @@ if __name__ == "__main__":
     print("loaded dataset")
 
     trainer = trlx.train(
-        config.model.model_path,
+        config.model.model_path, # gpt2
         reward_fn=reward_fn,
         prompts=train_prompts,
-        eval_prompts=val_prompts[0:1000],
+        eval_prompts=val_prompts[0:10],
         config=config,
     )
+    if not os.path.exists("models"):
+        os.makedirs("models")
+    trainer.save(f'models/gpt2-model2')
     print("done training")
